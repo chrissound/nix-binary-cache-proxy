@@ -1,50 +1,21 @@
-let
-  domain = "nixos-cachecache.example.com";
-in
-{
-  network.enableRollback = true;
+containers.nixbincache = {
+  privateNetwork = true;
+  autoStart = true;
+  hostAddress = "192.168.140.10";
+  localAddress = "192.168.140.11";
 
-  machine1 = { pkgs, ... }: {
-    deployment.targetEnv = "ec2";
-    deployment.ec2.accessKeyId = "example-nixops"; # symbolic name looked up in ~/.ec2-keys or a ~/.aws/credentials profile name
-    deployment.ec2.region = "eu-central-1";
-    deployment.ec2.instanceType = "t2.medium";
-    deployment.ec2.keyPair = "yourkeypairname";
-    deployment.ec2.ebsBoot = true;
-    deployment.ec2.ebsInitialRootDiskSize = 100;
+  config = { config, pkgs, ... }:
+  {
 
-    deployment.route53.accessKeyId = "example-nixops";
-    deployment.route53.hostName = domain;
-    deployment.route53.ttl = 1;
-
-    # Firewall all connections (except SSH which is open by default).
-    networking.firewall.enable = true;
-    # Reject instead of drop.
+    networking.firewall.enable = false;
     networking.firewall.rejectPackets = true;
-    networking.firewall.allowedTCPPorts = [
-      80 # nginx
-      443 # nginx
-    ];
+    networking.firewall.allowedTCPPorts =  [ 80 443 ];
 
-    boot.kernelModules = [ "tcp_bbr" ];
 
-    # Enable BBR congestion control
-    boot.kernel.sysctl."net.ipv4.tcp_congestion_control" = "bbr";
-    boot.kernel.sysctl."net.core.default_qdisc" = "fq"; # see https://news.ycombinator.com/item?id=14814530
-
-    environment.systemPackages = [
-      pkgs.htop
-      pkgs.ncdu
-      pkgs.nload
-      pkgs.vim
-    ];
-
-    nix.binaryCaches = [ "http://nixos-cache.example.com/" "http://cache.nixos.org/" ];
-    
     services.nginx = {
       enable = true;
       appendHttpConfig = ''
-        proxy_cache_path /tmp/cache/ levels=1:2 keys_zone=cachecache:100m max_size=10g inactive=365d use_temp_path=off;
+        proxy_cache_path /var/public-nginx-cache/ levels=1:2 keys_zone=cachecache:100m max_size=200g inactive=180d use_temp_path=off;
 
         # Cache only success status codes; in particular we don't want to cache 404s.
         # See https://serverfault.com/a/690258/128321
@@ -56,7 +27,7 @@ in
 
         access_log logs/access.log;
       '';
-      virtualHosts."${domain}" = {
+      virtualHosts."localhost" = {
         # enableACME = true;
 
         locations."/" = {
@@ -64,6 +35,7 @@ in
           extraConfig = ''
             expires max;
             add_header Cache-Control $cache_header always;
+            sendfile on;
 
             # Ask the upstream server if a file isn't available locally
             error_page 404 = @fallback;
@@ -110,6 +82,5 @@ in
         };
       };
     };
-
   };
-}
+};
