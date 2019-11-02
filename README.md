@@ -26,12 +26,12 @@ Within hardware-configuration.nix
     };
 ```
 
-3. Simply point your NixOS boxes at it with:
+3. Simply modify the host's binary caches sources with:
 
 ```nix
 {
   nix.binaryCaches = [
-    "192168.140.10"
+    "http://192.168.140.10"
     "http://cache.nixos.org/" # include this line if you want it to fallback to upstream if your cache is down
   ];
 }
